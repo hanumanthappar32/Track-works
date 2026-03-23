@@ -1,0 +1,5 @@
+{
+  "name": "Civil Works Management",
+  "description": "A comprehensive system for civil engineers to track administrative, financial, and physical progress of public works.",
+  "requestFramePermissions": ["camera"]
+}

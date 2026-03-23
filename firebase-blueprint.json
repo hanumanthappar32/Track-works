@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "role": { "type": "string", "enum": ["admin", "engineer"], "description": "User role" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Work": {
+      "title": "Work",
+      "description": "Details of a civil work project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the work" },
+        "financialYear": { "type": "string", "description": "Financial year (e.g., 2023-24)" },
+        "classification": { "type": "string", "enum": ["Fresh", "Spillover"], "description": "Work classification" },
+        "estimateYear": { "type": "string", "description": "Year of estimate" },
+        "estimateStatus": { "type": "string", "enum": ["Submitted", "Sanctioned"], "description": "Current status of the estimate" },
+        "estimatedCost": { "type": "number", "description": "Estimated cost in currency units" },
+        "sanctionRefNo": { "type": "string", "description": "Sanction reference number" },
+        "sanctionDate": { "type": "string", "format": "date", "description": "Date of sanction" },
+        "headOfAccount": { "type": "string", "description": "Head of Account" },
+        "agencyName": { "type": "string", "description": "Name of the agency/contractor" },
+        "agreementNo": { "type": "string", "description": "Agreement number" },
+        "agreementDate": { "type": "string", "format": "date", "description": "Agreement date" },
+        "physicalProgress": { "type": "number", "description": "Percentage of physical progress (0-100)" },
+        "progressRemarks": { "type": "string", "description": "Remarks on physical progress" },
+        "createdBy": { "type": "string", "description": "UID of the user who created this work" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["name", "financialYear", "classification", "estimateStatus", "createdBy"]
+    },
+    "Bill": {
+      "title": "Bill",
+      "description": "Financial progress bill details",
+      "type": "object",
+      "properties": {
+        "billNo": { "type": "string", "description": "Bill number" },
+        "amount": { "type": "number", "description": "Bill amount" },
+        "submissionDate": { "type": "string", "format": "date", "description": "Date of bill submission" },
+        "status": { "type": "string", "enum": ["Paid", "Pending"], "description": "Payment status" },
+        "paymentDate": { "type": "string", "format": "date", "description": "Date of payment" },
+        "workId": { "type": "string", "description": "ID of the associated work" }
+      },
+      "required": ["billNo", "amount", "submissionDate", "status", "workId"]
+    },
+    "Photo": {
+      "title": "Photo",
+      "description": "Site photo with progress details",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "URL of the stored photo" },
+        "description": { "type": "string", "description": "Description of the photo" },
+        "date": { "type": "string", "format": "date", "description": "Date the photo was taken" },
+        "workId": { "type": "string", "description": "ID of the associated work" }
+      },
+      "required": ["url", "date", "workId"]
+    },
+    "HeadOfAccount": {
+      "title": "Head of Account",
+      "description": "Predefined Head of Account",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "HOA code" },
+        "name": { "type": "string", "description": "HOA name" }
+      },
+      "required": ["code", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/works/{workId}": {
+      "schema": "Work",
+      "description": "Civil work projects"
+    },
+    "/works/{workId}/bills/{billId}": {
+      "schema": "Bill",
+      "description": "Bills for a specific work"
+    },
+    "/works/{workId}/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Progress photos for a specific work"
+    },
+    "/headsOfAccount/{hoaId}": {
+      "schema": "HeadOfAccount",
+      "description": "List of available Heads of Account"
+    }
+  }
+}

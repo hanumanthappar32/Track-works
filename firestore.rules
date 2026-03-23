@@ -1,0 +1,192 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - role: string (required, 'admin' or 'engineer')
+    //
+    // Collection: works
+    // Document ID: workId
+    // Fields:
+    //   - name: string (required)
+    //   - financialYear: string (required)
+    //   - classification: string (required, 'Fresh' or 'Spillover')
+    //   - estimateYear: string (optional)
+    //   - estimateStatus: string (required, 'Submitted' or 'Sanctioned')
+    //   - estimatedCost: number (optional)
+    //   - sanctionRefNo: string (optional)
+    //   - sanctionDate: string (optional)
+    //   - headOfAccount: string (optional)
+    //   - agencyName: string (optional)
+    //   - agreementNo: string (optional)
+    //   - agreementDate: string (optional)
+    //   - physicalProgress: number (optional, 0-100)
+    //   - progressRemarks: string (optional)
+    //   - createdBy: string (required, UID)
+    //   - createdAt: string (required, timestamp)
+    //
+    // Collection: works/{workId}/bills
+    // Document ID: billId
+    // Fields:
+    //   - billNo: string (required)
+    //   - amount: number (required)
+    //   - submissionDate: string (required)
+    //   - status: string (required, 'Paid' or 'Pending')
+    //   - paymentDate: string (optional)
+    //   - workId: string (required)
+    //
+    // Collection: works/{workId}/photos
+    // Document ID: photoId
+    // Fields:
+    //   - url: string (required)
+    //   - description: string (optional)
+    //   - date: string (required)
+    //   - workId: string (required)
+    //
+    // Collection: headsOfAccount
+    // Document ID: hoaId
+    // Fields:
+    //   - code: string (required)
+    //   - name: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "hanumanthappar32@gmail.com" && request.auth.token.email_verified == true) ||
+          (request.auth.token.email == "ramesh.h.ipad@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:image/.*"));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             (!('role' in data) || data.role in ['admin', 'engineer']) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100));
+    }
+
+    function isValidWork(data) {
+      let allowedFields = ['id', 'name', 'financialYear', 'classification', 'estimateYear', 'estimateStatus', 'estimatedCost', 'sanctionRefNo', 'sanctionDate', 'headOfAccount', 'agencyName', 'agreementNo', 'agreementDate', 'physicalProgress', 'progressRemarks', 'createdBy', 'createdAt', 'updatedAt'];
+      return hasRequiredFields(['name', 'financialYear', 'classification', 'estimateStatus', 'createdBy', 'createdAt']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 2000 &&
+             data.financialYear is string && data.financialYear.size() > 0 &&
+             data.classification in ['Fresh', 'Spillover'] &&
+             data.estimateStatus in ['Submitted', 'Sanctioned'] &&
+             data.createdBy == request.auth.uid &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt == null || data.updatedAt is string) &&
+             (!('estimatedCost' in data) || data.estimatedCost == null || data.estimatedCost is number) &&
+             (!('physicalProgress' in data) || data.physicalProgress == null || (data.physicalProgress is number && data.physicalProgress >= 0 && data.physicalProgress <= 100)) &&
+             (!('estimateYear' in data) || data.estimateYear == null || (data.estimateYear is string && data.estimateYear.size() < 100)) &&
+             (!('sanctionRefNo' in data) || data.sanctionRefNo == null || (data.sanctionRefNo is string && data.sanctionRefNo.size() < 200)) &&
+             (!('sanctionDate' in data) || data.sanctionDate == null || (data.sanctionDate is string && data.sanctionDate.size() < 100)) &&
+             (!('headOfAccount' in data) || data.headOfAccount == null || (data.headOfAccount is string && data.headOfAccount.size() < 500)) &&
+             (!('agencyName' in data) || data.agencyName == null || (data.agencyName is string && data.agencyName.size() < 500)) &&
+             (!('agreementNo' in data) || data.agreementNo == null || (data.agreementNo is string && data.agreementNo.size() < 200)) &&
+             (!('agreementDate' in data) || data.agreementDate == null || (data.agreementDate is string && data.agreementDate.size() < 100)) &&
+             (!('progressRemarks' in data) || data.progressRemarks == null || (data.progressRemarks is string && data.progressRemarks.size() < 5000));
+    }
+
+    function isValidBill(data) {
+      return hasRequiredFields(['billNo', 'amount', 'submissionDate', 'status', 'workId']) &&
+             data.billNo is string && data.billNo.size() > 0 &&
+             data.amount is number && data.amount >= 0 &&
+             data.status in ['Paid', 'Pending'] &&
+             data.workId is string;
+    }
+
+    function isValidPhoto(data) {
+      return hasRequiredFields(['url', 'date', 'workId', 'createdAt']) &&
+             isValidUrl(data.url) &&
+             data.url.size() < 1000000 &&
+             data.date is string &&
+             data.workId is string &&
+             data.createdAt is string &&
+             (!('description' in data) || (data.description is string && data.description.size() < 2000));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                      (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /works/{workId} {
+      allow read: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidWork(request.resource.data);
+      allow update: if isAuthenticated() && isValidWork(request.resource.data) &&
+                      (resource.data.createdBy == request.auth.uid || isAdmin()) &&
+                      request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+
+      match /bills/{billId} {
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidBill(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow update: if isAuthenticated() && isValidBill(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+      }
+
+      match /photos/{photoId} {
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidPhoto(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow update: if isAuthenticated() && isValidPhoto(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /headsOfAccount/{hoaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
