@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, User as FirebaseUser, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, query, where, orderBy, onSnapshot, getDocFromServer, Timestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -7,22 +7,12 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({
-  prompt: 'login select_account'
-});
+setPersistence(auth, browserSessionPersistence);
 
 // Auth helper functions
-export const signIn = async () => {
-  try {
-    await setPersistence(auth, browserSessionPersistence);
-    return await signInWithPopup(auth, googleProvider);
-  } catch (error) {
-    console.error("Error during sign in:", error);
-    throw error;
-  }
-};
+export const signInEmail = (email: string, pass: string) => signInWithEmailAndPassword(auth, email, pass);
+export const signUpEmail = (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass);
+export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 export const logOut = () => signOut(auth);
 
 // Firestore error handling

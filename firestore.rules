@@ -72,7 +72,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
           (request.auth.token.email == "hanumanthappar32@gmail.com" && request.auth.token.email_verified == true) ||
           (request.auth.token.email == "ramesh.h.ipad@gmail.com" && request.auth.token.email_verified == true));
     }
@@ -102,7 +102,7 @@ service cloud.firestore {
              data.uid is string && data.uid.size() > 0 &&
              data.email is string && isValidEmail(data.email) &&
              (!('role' in data) || data.role in ['admin', 'engineer']) &&
-             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100));
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100));
     }
 
     function isValidWork(data) {
