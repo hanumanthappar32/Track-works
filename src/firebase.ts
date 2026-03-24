@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, query, where, orderBy, onSnapshot, getDocFromServer, Timestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -7,13 +7,22 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
-  prompt: 'select_account'
+  prompt: 'login select_account'
 });
 
 // Auth helper functions
-export const signIn = () => signInWithPopup(auth, googleProvider);
+export const signIn = async () => {
+  try {
+    await setPersistence(auth, browserSessionPersistence);
+    return await signInWithPopup(auth, googleProvider);
+  } catch (error) {
+    console.error("Error during sign in:", error);
+    throw error;
+  }
+};
 export const logOut = () => signOut(auth);
 
 // Firestore error handling
@@ -49,11 +58,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: auth.currentUser?.uid || undefined,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || false,
+      isAnonymous: auth.currentUser?.isAnonymous || false,
+      tenantId: auth.currentUser?.tenantId || null,
       providerInfo: auth.currentUser?.providerData.map(provider => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
@@ -65,7 +74,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  
+  // Create a more user-friendly error message for common cases
+  let userMessage = 'A database error occurred.';
+  if (errInfo.error.includes('insufficient permissions')) {
+    userMessage = `Permission denied for ${operationType} on ${path}. Please check your access rights.`;
+  } else if (errInfo.error.includes('offline')) {
+    userMessage = 'You appear to be offline. Please check your connection.';
+  }
+
+  const finalError = new Error(JSON.stringify(errInfo));
+  (finalError as any).userMessage = userMessage;
+  throw finalError;
 }
 
 // Connection test

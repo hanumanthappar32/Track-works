@@ -20,6 +20,20 @@ export default function App() {
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
 
   useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error:', event.error);
+      setError(`An unexpected error occurred: ${event.message}`);
+    };
+    const handlePromiseRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      const reason = event.reason;
+      const message = reason?.userMessage || reason?.message || 'Unknown error';
+      setError(`A background task failed: ${message}`);
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handlePromiseRejection);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
@@ -29,7 +43,7 @@ export default function App() {
           if (userDoc.exists()) {
             setUserProfile(userDoc.data() as UserProfile);
           } else {
-            // Create initial profile
+            // Create initial profile for any new user
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
@@ -39,8 +53,10 @@ export default function App() {
             await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
             setUserProfile(newProfile);
           }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+        } catch (err: any) {
+          console.error('Auth state change error:', err);
+          setError('Failed to load user profile. Please try refreshing.');
+          // Don't re-throw here to avoid crashing the app, just show the error state
         }
       } else {
         setUser(null);
@@ -51,7 +67,11 @@ export default function App() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handlePromiseRejection);
+      unsubscribe();
+    };
   }, []);
 
   const handleSignIn = async () => {
@@ -108,7 +128,7 @@ export default function App() {
             <LogIn className="w-8 h-8 text-emerald-600" />
           </div>
           <h1 className="text-3xl font-serif font-medium text-stone-900 mb-2">Civil Works Management</h1>
-          <p className="text-stone-500 mb-8">Sign in to manage and monitor public works progress.</p>
+          <p className="text-stone-500 mb-8">Sign in with your Google account. You will be asked to enter your password for security.</p>
           <button
             onClick={handleSignIn}
             disabled={isSigningIn}
