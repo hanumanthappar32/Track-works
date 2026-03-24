@@ -62,10 +62,21 @@ export default function App() {
       await signIn();
     } catch (err: any) {
       // Ignore cancelled popup request or popup closed by user
-      if (err.code !== 'auth/cancelled-popup-request' && err.code !== 'auth/popup-closed-by-user') {
-        setError('Failed to sign in. Please try again.');
-        console.error('Sign in error:', err);
+      if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+        return;
       }
+      
+      let message = 'Failed to sign in. Please try again.';
+      if (err.code === 'auth/popup-blocked') {
+        message = 'The sign-in popup was blocked by your browser. Please allow popups for this site.';
+      } else if (err.code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for Google Sign-in. Please add it to the Firebase Console.';
+      } else if (err.message) {
+        message = `Sign-in error: ${err.message}`;
+      }
+      
+      setError(message);
+      console.error('Sign in error:', err);
     } finally {
       setIsSigningIn(false);
     }
@@ -110,6 +121,30 @@ export default function App() {
             )}
             {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
           </button>
+
+          {error && (
+            <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-left">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-900">Sign-in Error</p>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-red-600 font-medium uppercase tracking-wider">Troubleshooting:</p>
+                  <ul className="text-xs text-red-700 list-disc list-inside space-y-1">
+                    <li>Ensure popups are allowed for this site.</li>
+                    <li>Check if third-party cookies are enabled in your browser.</li>
+                    <li>Verify this domain is added to "Authorized domains" in Firebase Console.</li>
+                  </ul>
+                </div>
+                <button 
+                  onClick={() => setError(null)}
+                  className="text-xs font-bold text-red-600 hover:text-red-800 mt-4 uppercase tracking-wider"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     );
@@ -154,13 +189,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {error && (
-        <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 p-4 rounded-xl shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-bottom-4">
-          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-          <p className="text-sm text-red-800">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-xs font-bold">DISMISS</button>
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 p-4 rounded-xl shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-bottom-4">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+            <p className="text-sm text-red-800">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-xs font-bold">DISMISS</button>
+          </div>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }
