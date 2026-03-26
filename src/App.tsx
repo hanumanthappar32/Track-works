@@ -7,6 +7,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { WorkDetails } from './components/WorkDetails';
 import { WorkForm } from './components/WorkForm';
+import { Reports } from './components/Reports';
 import { LogIn, Loader2, AlertCircle, Mail, Lock, UserPlus, Eye, EyeOff, KeyRound, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -16,7 +17,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'add-work' | 'work-details' | 'edit-work'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports'>('dashboard');
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   
   // Email/Password state
@@ -56,6 +57,18 @@ export default function App() {
           
           if (userDoc.exists()) {
             const data = userDoc.data() as UserProfile;
+            
+            // Auto-upgrade specific emails to admin if they aren't already
+            const adminEmails = ['hanumanthappar32@gmail.com', 'ramesh.h.ipad@gmail.com'];
+            if (firebaseUser.email && adminEmails.includes(firebaseUser.email) && data.role !== 'admin') {
+              try {
+                await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin' });
+                data.role = 'admin';
+              } catch (e) {
+                console.error('Failed to auto-upgrade to admin:', e);
+              }
+            }
+
             // If displayName is missing, try to update it from email
             if (!data.displayName && firebaseUser.email) {
               const emailPrefix = firebaseUser.email.split('@')[0];
@@ -74,11 +87,14 @@ export default function App() {
             // Create initial profile for any new user
             const emailPrefix = firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User';
             const defaultDisplayName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+            const adminEmails = ['hanumanthappar32@gmail.com', 'ramesh.h.ipad@gmail.com'];
+            const isInitialAdmin = firebaseUser.email && adminEmails.includes(firebaseUser.email);
+            
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || defaultDisplayName,
-              role: 'engineer', // Default role
+              role: isInitialAdmin ? 'admin' : 'engineer',
             };
             try {
               await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
@@ -171,10 +187,10 @@ export default function App() {
     }
   };
 
-  const navigateTo = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work', workId?: string) => {
+  const navigateTo = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports', workId?: string) => {
     setCurrentView(view);
     if (workId) setSelectedWorkId(workId);
-    else if (view === 'dashboard' || view === 'add-work') setSelectedWorkId(null);
+    else if (view === 'dashboard' || view === 'add-work' || view === 'reports') setSelectedWorkId(null);
   };
 
   if (loading) {
@@ -384,6 +400,7 @@ export default function App() {
         {currentView === 'add-work' && user && (
           <WorkForm 
             userId={user.uid} 
+            userRole={userProfile?.role}
             onCancel={() => navigateTo('dashboard')} 
             onSuccess={() => navigateTo('dashboard')} 
           />
@@ -391,6 +408,7 @@ export default function App() {
         {currentView === 'edit-work' && selectedWorkId && user && (
           <WorkForm 
             userId={user.uid} 
+            userRole={userProfile?.role}
             workId={selectedWorkId} 
             onCancel={() => navigateTo('work-details', selectedWorkId)} 
             onSuccess={() => navigateTo('work-details', selectedWorkId)} 
@@ -399,8 +417,15 @@ export default function App() {
         {currentView === 'work-details' && selectedWorkId && (
           <WorkDetails 
             workId={selectedWorkId} 
+            userRole={userProfile?.role}
             onBack={() => navigateTo('dashboard')} 
             onEdit={() => navigateTo('edit-work', selectedWorkId)}
+          />
+        )}
+        {currentView === 'reports' && user && (
+          <Reports 
+            userId={user.uid} 
+            onSelectWork={(id) => navigateTo('work-details', id)}
           />
         )}
       </AnimatePresence>

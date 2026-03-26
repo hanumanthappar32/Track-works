@@ -21,6 +21,7 @@ export interface Work {
   agreementDate?: string;
   physicalProgress?: number;
   progressRemarks?: string;
+  status: 'Completed' | 'To be started' | 'In progress';
   createdBy: string;
   createdAt: string;
 }

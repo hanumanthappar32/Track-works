@@ -30,6 +30,7 @@ service cloud.firestore {
     //   - agreementDate: string (optional)
     //   - physicalProgress: number (optional, 0-100)
     //   - progressRemarks: string (optional)
+    //   - status: string (required, 'Completed', 'To be started', or 'In progress')
     //   - createdBy: string (required, UID)
     //   - createdAt: string (required, timestamp)
     //
@@ -73,8 +74,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email == "hanumanthappar32@gmail.com" && request.auth.token.email_verified == true) ||
-          (request.auth.token.email == "ramesh.h.ipad@gmail.com" && request.auth.token.email_verified == true));
+          request.auth.token.email == "hanumanthappar32@gmail.com" ||
+          request.auth.token.email == "ramesh.h.ipad@gmail.com");
     }
 
     function hasRequiredFields(fields) {
@@ -105,16 +106,19 @@ service cloud.firestore {
              (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100));
     }
 
-    function isValidWork(data) {
-      let allowedFields = ['id', 'name', 'financialYear', 'classification', 'estimateYear', 'estimateStatus', 'estimatedCost', 'sanctionRefNo', 'sanctionDate', 'headOfAccount', 'agencyName', 'agreementNo', 'agreementDate', 'physicalProgress', 'progressRemarks', 'createdBy', 'createdAt', 'updatedAt'];
-      return hasRequiredFields(['name', 'financialYear', 'classification', 'estimateStatus', 'createdBy', 'createdAt']) &&
+    function isValidWork(data, isCreate) {
+      let allowedFields = ['id', 'name', 'financialYear', 'classification', 'estimateYear', 'estimateStatus', 'estimatedCost', 'sanctionRefNo', 'sanctionDate', 'headOfAccount', 'agencyName', 'agreementNo', 'agreementDate', 'physicalProgress', 'progressRemarks', 'status', 'createdBy', 'createdAt', 'updatedAt'];
+      let requiredFields = ['name', 'financialYear', 'classification', 'estimateStatus', 'status', 'createdBy', 'createdAt'];
+      
+      return (isCreate ? hasRequiredFields(requiredFields) : true) &&
              hasOnlyAllowedFields(allowedFields) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 2000 &&
              data.financialYear is string && data.financialYear.size() > 0 &&
              data.classification in ['Fresh', 'Spillover'] &&
              data.estimateStatus in ['Submitted', 'Sanctioned'] &&
-             data.createdBy == request.auth.uid &&
-             data.createdAt is string &&
+             (!('status' in data) || data.status in ['Completed', 'To be started', 'In progress']) &&
+             (!('createdBy' in data) || data.createdBy == request.auth.uid || isAdmin()) &&
+             (!('createdAt' in data) || data.createdAt is string) &&
              (!('updatedAt' in data) || data.updatedAt == null || data.updatedAt is string) &&
              (!('estimatedCost' in data) || data.estimatedCost == null || data.estimatedCost is number) &&
              (!('physicalProgress' in data) || data.physicalProgress == null || (data.physicalProgress is number && data.physicalProgress >= 0 && data.physicalProgress <= 100)) &&
@@ -158,31 +162,30 @@ service cloud.firestore {
     }
 
     match /works/{workId} {
-      allow read: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && isValidWork(request.resource.data);
-      allow update: if isAuthenticated() && isValidWork(request.resource.data) &&
-                      (resource.data.createdBy == request.auth.uid || isAdmin()) &&
-                      request.resource.data.createdBy == resource.data.createdBy;
-      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated() && (!('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidWork(request.resource.data, true);
+      allow update: if isAuthenticated() && isValidWork(request.resource.data, false) &&
+                      (isAdmin() || (resource.data.createdBy == request.auth.uid && request.resource.data.createdBy == resource.data.createdBy));
+      allow delete: if isAuthenticated() && (!('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid || isAdmin());
 
       match /bills/{billId} {
-        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow create: if isAuthenticated() && isValidBill(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow update: if isAuthenticated() && isValidBill(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow read: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidBill(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow update: if isAuthenticated() && isValidBill(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow delete: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
       }
 
       match /photos/{photoId} {
-        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow create: if isAuthenticated() && isValidPhoto(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow update: if isAuthenticated() && isValidPhoto(request.resource.data) && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow read: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && isValidPhoto(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow update: if isAuthenticated() && isValidPhoto(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow delete: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
       }
     }
 
     match /headsOfAccount/{hoaId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /{path=**} {

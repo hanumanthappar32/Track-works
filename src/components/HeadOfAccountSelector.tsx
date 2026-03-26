@@ -8,9 +8,10 @@ import { motion, AnimatePresence } from 'motion/react';
 interface HeadOfAccountSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  isAdmin?: boolean;
 }
 
-export function HeadOfAccountSelector({ value, onChange }: HeadOfAccountSelectorProps) {
+export function HeadOfAccountSelector({ value, onChange, isAdmin = false }: HeadOfAccountSelectorProps) {
   const [hoas, setHoas] = useState<HeadOfAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -155,70 +156,74 @@ export function HeadOfAccountSelector({ value, onChange }: HeadOfAccountSelector
                           </span>
                           <span className="text-sm text-stone-700">{hoa.name}</span>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 flex gap-1 pr-2">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingId(hoa.id!);
-                              setEditHoa({ code: hoa.code, name: hoa.name });
-                            }}
-                            className="p-1.5 text-stone-400 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-all"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={(e) => handleDelete(e, hoa.id!)}
-                            className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {isAdmin && (
+                          <div className="opacity-0 group-hover:opacity-100 flex gap-1 pr-2">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(hoa.id!);
+                                setEditHoa({ code: hoa.code, name: hoa.name });
+                              }}
+                              className="p-1.5 text-stone-400 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-all"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={(e) => handleDelete(e, hoa.id!)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="p-3 bg-stone-50 border-t border-stone-100">
-                {isAdding ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      className="w-24 px-3 py-2 text-sm bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
-                      placeholder="Code"
-                      value={newHoa.code}
-                      onChange={e => setNewHoa({ ...newHoa, code: e.target.value })}
-                    />
-                    <input
-                      type="text"
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
-                      placeholder="Name"
-                      value={newHoa.name}
-                      onChange={e => setNewHoa({ ...newHoa, name: e.target.value })}
-                    />
+              {isAdmin && (
+                <div className="p-3 bg-stone-50 border-t border-stone-100">
+                  {isAdding ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="w-24 px-3 py-2 text-sm bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Code"
+                        value={newHoa.code}
+                        onChange={e => setNewHoa({ ...newHoa, code: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="flex-1 px-3 py-2 text-sm bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Name"
+                        value={newHoa.name}
+                        onChange={e => setNewHoa({ ...newHoa, name: e.target.value })}
+                      />
+                      <button 
+                        onClick={handleAdd}
+                        className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setIsAdding(false)}
+                        className="p-2 bg-stone-200 text-stone-600 rounded-xl hover:bg-stone-300 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
                     <button 
-                      onClick={handleAdd}
-                      className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                      onClick={() => setIsAdding(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
                     >
-                      <Check className="w-4 h-4" />
+                      <Plus className="w-4 h-4" />
+                      Add New Head of Account
                     </button>
-                    <button 
-                      onClick={() => setIsAdding(false)}
-                      className="p-2 bg-stone-200 text-stone-600 rounded-xl hover:bg-stone-300 transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => setIsAdding(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add New Head of Account
-                  </button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

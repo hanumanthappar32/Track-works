@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, collection, query, onSnapshot, deleteDoc, addDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { Work, Bill, Photo } from '../types';
 import { 
@@ -13,11 +13,12 @@ import { format } from 'date-fns';
 
 interface WorkDetailsProps {
   workId: string;
+  userRole?: string;
   onBack: () => void;
   onEdit: () => void;
 }
 
-export function WorkDetails({ workId, onBack, onEdit }: WorkDetailsProps) {
+export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsProps) {
   const [work, setWork] = useState<Work | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -55,6 +56,10 @@ export function WorkDetails({ workId, onBack, onEdit }: WorkDetailsProps) {
   const totalPending = bills.filter(b => b.status === 'Pending').reduce((sum, b) => sum + b.amount, 0);
   const balance = (work?.estimatedCost || 0) - totalPaid;
 
+  const isAdmin = userRole === 'admin';
+  const isCreator = work?.createdBy === auth.currentUser?.uid;
+  const canManage = isAdmin || isCreator;
+
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this work? This action cannot be undone.')) {
       try {
@@ -82,22 +87,24 @@ export function WorkDetails({ workId, onBack, onEdit }: WorkDetailsProps) {
           <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           Back to Dashboard
         </button>
-        <div className="flex gap-3">
-          <button
-            onClick={onEdit}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 transition-all font-medium"
-          >
-            <Edit3 className="w-4 h-4" />
-            Edit Work
-          </button>
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 rounded-xl text-red-500 hover:bg-red-50 transition-all font-medium"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        </div>
+        {canManage && (
+          <div className="flex gap-3">
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:bg-stone-50 transition-all font-medium"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit Work
+            </button>
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 rounded-xl text-red-500 hover:bg-red-50 transition-all font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hero Section */}
@@ -109,6 +116,13 @@ export function WorkDetails({ workId, onBack, onEdit }: WorkDetailsProps) {
               work.classification === 'Fresh' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
             }`}>
               {work.classification} Work
+            </span>
+            <span className={`px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+              work.status === 'Completed' ? 'bg-blue-500/20 text-blue-400' : 
+              work.status === 'In progress' ? 'bg-emerald-500/20 text-emerald-400' : 
+              'bg-stone-500/20 text-stone-400'
+            }`}>
+              {work.status}
             </span>
             <span className="text-stone-400 text-sm font-medium flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />

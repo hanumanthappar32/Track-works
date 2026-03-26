@@ -8,12 +8,13 @@ import { HeadOfAccountSelector } from './HeadOfAccountSelector';
 
 interface WorkFormProps {
   userId: string;
+  userRole?: string;
   workId?: string;
   onCancel: () => void;
   onSuccess: () => void;
 }
 
-export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps) {
+export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: WorkFormProps) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!workId);
   const [formData, setFormData] = useState<Partial<Work>>({
@@ -21,6 +22,7 @@ export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps)
     financialYear: `${new Date().getFullYear()}-${(new Date().getFullYear() + 1).toString().slice(-2)}`,
     classification: 'Fresh',
     estimateStatus: 'Submitted',
+    status: 'To be started',
     physicalProgress: 0,
     progressRemarks: '',
   });
@@ -31,7 +33,11 @@ export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps)
         try {
           const workDoc = await getDoc(doc(db, 'works', workId));
           if (workDoc.exists()) {
-            setFormData(workDoc.data() as Work);
+            const data = workDoc.data() as Work;
+            setFormData({
+              ...data,
+              status: data.status || 'To be started'
+            });
           }
         } catch (err) {
           handleFirestoreError(err, OperationType.GET, `works/${workId}`);
@@ -51,7 +57,7 @@ export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps)
     try {
       const data = {
         ...formData,
-        createdBy: userId,
+        createdBy: formData.createdBy || userId,
         createdAt: formData.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -151,6 +157,20 @@ export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps)
                   <option value="Spillover">Spillover Work</option>
                 </select>
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-stone-400 uppercase tracking-wider">Work Status</label>
+                <select
+                  name="status"
+                  required
+                  className="w-full px-4 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
+                  value={formData.status || 'To be started'}
+                  onChange={handleChange}
+                >
+                  <option value="To be started">To be started</option>
+                  <option value="In progress">In progress</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
             </div>
           </div>
         </section>
@@ -242,6 +262,7 @@ export function WorkForm({ userId, workId, onCancel, onSuccess }: WorkFormProps)
               <HeadOfAccountSelector 
                 value={formData.headOfAccount || ''} 
                 onChange={(val) => setFormData(prev => ({ ...prev, headOfAccount: val }))}
+                isAdmin={userRole === 'admin'}
               />
             </div>
             <div className="space-y-2 md:col-span-2">

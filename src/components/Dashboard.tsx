@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, getDoc, doc } from 'firebase/firestore';
 import { Work } from '../types';
 import { Search, Filter, Plus, Calendar, ArrowRight, HardHat, CheckCircle2, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -15,28 +15,69 @@ interface DashboardProps {
 export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFY, setFilterFY] = useState('All');
   const [filterClassification, setFilterClassification] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
 
   useEffect(() => {
     if (!userId) return;
 
     setLoading(true);
-    const q = query(
-      collection(db, 'works'), 
-      where('createdBy', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const worksData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work));
-      setWorks(worksData);
-      setLoading(false);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'works');
-    });
+    
+    // Check if user is admin to decide on query
+    const checkAdminAndFetch = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        const adminStatus = userDoc.exists() && userDoc.data().role === 'admin';
+        
+        // Fallback for hardcoded admins if user doc doesn't exist yet
+        const isHardcodedAdmin = ['hanumanthappar32@gmail.com', 'ramesh.h.ipad@gmail.com'].includes(auth.currentUser?.email || '');
+        
+        const finalIsAdmin = adminStatus || isHardcodedAdmin;
+        setIsAdmin(finalIsAdmin);
+        
+        let q;
+        if (finalIsAdmin) {
+          q = query(collection(db, 'works'), orderBy('createdAt', 'desc'));
+        } else {
+          q = query(
+            collection(db, 'works'), 
+            where('createdBy', '==', userId),
+            orderBy('createdAt', 'desc')
+          );
+        }
 
-    return () => unsubscribe();
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const worksData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work));
+          setWorks(worksData);
+          setLoading(false);
+        }, (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'works');
+        });
+
+        return unsubscribe;
+      } catch (err) {
+        console.error("Error checking admin status:", err);
+        // Fallback to personal works
+        const q = query(
+          collection(db, 'works'), 
+          where('createdBy', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+        return onSnapshot(q, (snapshot) => {
+          setWorks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work)));
+          setLoading(false);
+        });
+      }
+    };
+
+    let unsubPromise = checkAdminAndFetch();
+    
+    return () => {
+      unsubPromise.then(unsub => unsub());
+    };
   }, [userId]);
 
   const filteredWorks = works.filter(work => {
@@ -44,7 +85,8 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
                          (work.agencyName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
     const matchesFY = filterFY === 'All' || work.financialYear === filterFY;
     const matchesClassification = filterClassification === 'All' || work.classification === filterClassification;
-    return matchesSearch && matchesFY && matchesClassification;
+    const matchesStatus = filterStatus === 'All' || work.status === filterStatus;
+    return matchesSearch && matchesFY && matchesClassification && matchesStatus;
   });
 
   const financialYears = ['All', ...Array.from(new Set(works.map(w => w.financialYear)))].sort().reverse();
@@ -54,8 +96,19 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h2 className="text-4xl font-serif font-medium text-stone-900 tracking-tight">Works Dashboard</h2>
-          <p className="text-stone-500 mt-2">Monitor and manage all public works projects across financial years.</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="text-4xl font-serif font-medium text-stone-900 tracking-tight">Works Dashboard</h2>
+            {isAdmin && (
+              <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-emerald-200">
+                Admin Mode
+              </span>
+            )}
+          </div>
+          <p className="text-stone-500 mt-2">
+            {isAdmin 
+              ? "Viewing all public works projects across the entire system." 
+              : "Monitor and manage your assigned public works projects."}
+          </p>
         </div>
         <button
           onClick={onAddWork}
@@ -101,6 +154,16 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
             <option value="Fresh">Fresh</option>
             <option value="Spillover">Spillover</option>
           </select>
+          <select
+            className="px-6 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="All">All Status</option>
+            <option value="Not started">Not started</option>
+            <option value="In progress">In progress</option>
+            <option value="Completed">Completed</option>
+          </select>
         </div>
       </div>
 
@@ -121,11 +184,20 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
               className="group bg-white rounded-3xl p-6 border border-stone-200 shadow-sm hover:shadow-xl hover:border-emerald-200 transition-all cursor-pointer relative overflow-hidden"
             >
               <div className="flex justify-between items-start mb-4">
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                  work.classification === 'Fresh' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {work.classification}
-                </span>
+                <div className="flex gap-2">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    work.classification === 'Fresh' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {work.classification}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    work.status === 'Completed' ? 'bg-blue-100 text-blue-700' : 
+                    work.status === 'In progress' ? 'bg-emerald-100 text-emerald-700' : 
+                    'bg-stone-100 text-stone-700'
+                  }`}>
+                    {work.status}
+                  </span>
+                </div>
                 <span className="text-stone-400 text-xs font-medium flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   {work.financialYear}

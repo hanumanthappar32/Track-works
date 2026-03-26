@@ -31,10 +31,11 @@
         "agreementDate": { "type": "string", "format": "date", "description": "Agreement date" },
         "physicalProgress": { "type": "number", "description": "Percentage of physical progress (0-100)" },
         "progressRemarks": { "type": "string", "description": "Remarks on physical progress" },
+        "status": { "type": "string", "enum": ["Completed", "To be started", "In progress"], "description": "Current status of the work" },
         "createdBy": { "type": "string", "description": "UID of the user who created this work" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
-      "required": ["name", "financialYear", "classification", "estimateStatus", "createdBy"]
+      "required": ["name", "financialYear", "classification", "estimateStatus", "status", "createdBy"]
     },
     "Bill": {
       "title": "Bill",
