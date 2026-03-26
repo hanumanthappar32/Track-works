@@ -69,23 +69,38 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
 
   const stats = {
     total: filteredWorks.length,
-    fresh: {
-      total: filteredWorks.filter(w => w.classification === 'Fresh').length,
-      completed: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'Completed').length,
-      inProgress: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'In progress').length,
-      toBeStarted: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'To be started').length,
-    },
-    spillover: {
-      total: filteredWorks.filter(w => w.classification === 'Spillover').length,
-      completed: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'Completed').length,
-      inProgress: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'In progress').length,
-      toBeStarted: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'To be started').length,
-    },
-    overall: {
-      completed: filteredWorks.filter(w => w.status === 'Completed').length,
-      inProgress: filteredWorks.filter(w => w.status === 'In progress').length,
-      toBeStarted: filteredWorks.filter(w => w.status === 'To be started').length,
-    }
+    fresh: (() => {
+      const total = filteredWorks.filter(w => w.classification === 'Fresh').length;
+      const completed = filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'Completed').length;
+      const inProgress = filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'In progress').length;
+      return {
+        total,
+        completed,
+        inProgress,
+        toBeStarted: total - (completed + inProgress),
+      };
+    })(),
+    spillover: (() => {
+      const total = filteredWorks.filter(w => w.classification === 'Spillover').length;
+      const completed = filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'Completed').length;
+      const inProgress = filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'In progress').length;
+      return {
+        total,
+        completed,
+        inProgress,
+        toBeStarted: total - (completed + inProgress),
+      };
+    })(),
+    overall: (() => {
+      const total = filteredWorks.length;
+      const completed = filteredWorks.filter(w => w.status === 'Completed').length;
+      const inProgress = filteredWorks.filter(w => w.status === 'In progress').length;
+      return {
+        completed,
+        inProgress,
+        toBeStarted: total - (completed + inProgress),
+      };
+    })(),
   };
 
   const handleDrillDown = (title: string, classification: string | 'All', status: string | 'All') => {
@@ -93,9 +108,13 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
     if (classification !== 'All') {
       filtered = filtered.filter(w => w.classification === classification);
     }
-    if (status !== 'All') {
+    
+    if (status === 'To be started') {
+      filtered = filtered.filter(w => w.status !== 'Completed' && w.status !== 'In progress');
+    } else if (status !== 'All') {
       filtered = filtered.filter(w => w.status === status);
     }
+    
     setDrillDown({ title, works: filtered });
   };
 
