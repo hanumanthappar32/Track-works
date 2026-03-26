@@ -15,6 +15,7 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [drillDown, setDrillDown] = useState<{ title: string, works: Work[] } | null>(null);
+  const [filterHeadOfAccount, setFilterHeadOfAccount] = useState('All');
 
   useEffect(() => {
     if (!userId) return;
@@ -59,29 +60,36 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
     };
   }, [userId]);
 
+  const filteredWorks = works.filter(w => {
+    const matchesHeadOfAccount = filterHeadOfAccount === 'All' || w.headOfAccount === filterHeadOfAccount;
+    return matchesHeadOfAccount;
+  });
+
+  const headsOfAccount = ['All', ...Array.from(new Set(works.map(w => w.headOfAccount).filter(Boolean) as string[]))].sort();
+
   const stats = {
-    total: works.length,
+    total: filteredWorks.length,
     fresh: {
-      total: works.filter(w => w.classification === 'Fresh').length,
-      completed: works.filter(w => w.classification === 'Fresh' && w.status === 'Completed').length,
-      inProgress: works.filter(w => w.classification === 'Fresh' && w.status === 'In progress').length,
-      toBeStarted: works.filter(w => w.classification === 'Fresh' && w.status === 'To be started').length,
+      total: filteredWorks.filter(w => w.classification === 'Fresh').length,
+      completed: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'Completed').length,
+      inProgress: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'In progress').length,
+      toBeStarted: filteredWorks.filter(w => w.classification === 'Fresh' && w.status === 'To be started').length,
     },
     spillover: {
-      total: works.filter(w => w.classification === 'Spillover').length,
-      completed: works.filter(w => w.classification === 'Spillover' && w.status === 'Completed').length,
-      inProgress: works.filter(w => w.classification === 'Spillover' && w.status === 'In progress').length,
-      toBeStarted: works.filter(w => w.classification === 'Spillover' && w.status === 'To be started').length,
+      total: filteredWorks.filter(w => w.classification === 'Spillover').length,
+      completed: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'Completed').length,
+      inProgress: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'In progress').length,
+      toBeStarted: filteredWorks.filter(w => w.classification === 'Spillover' && w.status === 'To be started').length,
     },
     overall: {
-      completed: works.filter(w => w.status === 'Completed').length,
-      inProgress: works.filter(w => w.status === 'In progress').length,
-      toBeStarted: works.filter(w => w.status === 'To be started').length,
+      completed: filteredWorks.filter(w => w.status === 'Completed').length,
+      inProgress: filteredWorks.filter(w => w.status === 'In progress').length,
+      toBeStarted: filteredWorks.filter(w => w.status === 'To be started').length,
     }
   };
 
   const handleDrillDown = (title: string, classification: string | 'All', status: string | 'All') => {
-    let filtered = works;
+    let filtered = filteredWorks;
     if (classification !== 'All') {
       filtered = filtered.filter(w => w.classification === classification);
     }
@@ -114,6 +122,24 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
           Print Report
         </button>
       </header>
+
+      {/* Filter */}
+      <div className="bg-white p-4 rounded-3xl shadow-sm border border-stone-200 flex items-center gap-4">
+        <div className="flex items-center gap-2 text-stone-500">
+          <FileText className="w-5 h-5" />
+          <span className="text-sm font-medium">Filter by Head of Account:</span>
+        </div>
+        <select
+          className="px-6 py-2 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer text-sm"
+          value={filterHeadOfAccount}
+          onChange={(e) => setFilterHeadOfAccount(e.target.value)}
+        >
+          <option value="All">All Heads of Account</option>
+          {headsOfAccount.filter(h => h !== 'All').map(h => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+      </div>
 
       {/* Overall Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

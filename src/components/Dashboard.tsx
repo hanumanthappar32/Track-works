@@ -20,6 +20,7 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
   const [filterFY, setFilterFY] = useState('All');
   const [filterClassification, setFilterClassification] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [filterHeadOfAccount, setFilterHeadOfAccount] = useState('All');
 
   useEffect(() => {
     if (!userId) return;
@@ -86,10 +87,12 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
     const matchesFY = filterFY === 'All' || work.financialYear === filterFY;
     const matchesClassification = filterClassification === 'All' || work.classification === filterClassification;
     const matchesStatus = filterStatus === 'All' || work.status === filterStatus;
-    return matchesSearch && matchesFY && matchesClassification && matchesStatus;
+    const matchesHeadOfAccount = filterHeadOfAccount === 'All' || work.headOfAccount === filterHeadOfAccount;
+    return matchesSearch && matchesFY && matchesClassification && matchesStatus && matchesHeadOfAccount;
   });
 
   const financialYears = ['All', ...Array.from(new Set(works.map(w => w.financialYear)))].sort().reverse();
+  const headsOfAccount = ['All', ...Array.from(new Set(works.map(w => w.headOfAccount).filter(Boolean) as string[]))].sort();
 
   return (
     <div className="space-y-8">
@@ -163,6 +166,16 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
             <option value="Not started">Not started</option>
             <option value="In progress">In progress</option>
             <option value="Completed">Completed</option>
+          </select>
+          <select
+            className="px-6 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer"
+            value={filterHeadOfAccount}
+            onChange={(e) => setFilterHeadOfAccount(e.target.value)}
+          >
+            <option value="All">All Heads of Account</option>
+            {headsOfAccount.filter(h => h !== 'All').map(h => (
+              <option key={h} value={h}>{h}</option>
+            ))}
           </select>
         </div>
       </div>
