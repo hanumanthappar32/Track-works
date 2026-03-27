@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { doc, collection, query, onSnapshot, deleteDoc, addDoc, updateDoc, orderBy } from 'firebase/firestore';
+import { doc, collection, query, onSnapshot, deleteDoc, addDoc, updateDoc, orderBy, getDocs } from 'firebase/firestore';
 import { Work, Bill, Photo } from '../types';
 import { 
   ArrowLeft, Edit3, Trash2, Plus, DollarSign, CheckCircle2, 
@@ -10,6 +10,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface WorkDetailsProps {
   workId: string;
@@ -60,14 +66,38 @@ export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsPro
   const isCreator = work?.createdBy === auth.currentUser?.uid;
   const canManage = isAdmin || isCreator;
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [confirmDeleteBillId, setConfirmDeleteBillId] = useState<string | null>(null);
+  const [confirmDeletePhotoId, setConfirmDeletePhotoId] = useState<string | null>(null);
+
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this work? This action cannot be undone.')) {
-      try {
-        await deleteDoc(doc(db, 'works', workId));
-        onBack();
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `works/${workId}`);
-      }
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      setTimeout(() => setShowDeleteConfirm(false), 3000);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Delete all bills
+      const billsRef = collection(db, 'works', workId, 'bills');
+      const billsSnapshot = await getDocs(billsRef);
+      const billDeletes = billsSnapshot.docs.map(d => deleteDoc(d.ref));
+      
+      // 2. Delete all photos
+      const photosRef = collection(db, 'works', workId, 'photos');
+      const photosSnapshot = await getDocs(photosRef);
+      const photoDeletes = photosSnapshot.docs.map(d => deleteDoc(d.ref));
+
+      // Wait for all subcollection deletes
+      await Promise.all([...billDeletes, ...photoDeletes]);
+
+      // 3. Delete the work document
+      await deleteDoc(doc(db, 'works', workId));
+      onBack();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `works/${workId}`);
+      setLoading(false);
     }
   };
 
@@ -98,10 +128,15 @@ export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsPro
             </button>
             <button
               onClick={handleDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-red-100 rounded-xl text-red-500 hover:bg-red-50 transition-all font-medium"
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 border rounded-xl transition-all font-medium",
+                showDeleteConfirm 
+                  ? "bg-red-500 border-red-500 text-white" 
+                  : "bg-white border-red-100 text-red-500 hover:bg-red-50"
+              )}
             >
               <Trash2 className="w-4 h-4" />
-              Delete
+              {showDeleteConfirm ? "Confirm Delete" : "Delete"}
             </button>
           </div>
         )}
@@ -213,6 +248,14 @@ export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsPro
                   <div className="space-y-1">
                     <p className="text-[10px] uppercase font-bold text-stone-400 tracking-widest">Agreement Date</p>
                     <p className="text-stone-900 font-medium">{work.agreementDate ? format(new Date(work.agreementDate), 'dd MMM yyyy') : 'N/A'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-stone-400 tracking-widest">District</p>
+                    <p className="text-stone-900 font-medium">{work.district || 'N/A'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-stone-400 tracking-widest">Thaluk</p>
+                    <p className="text-stone-900 font-medium">{work.thaluk || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -344,13 +387,21 @@ export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsPro
                             )}
                             <button 
                               onClick={async () => {
-                                if(confirm('Delete this bill?')) {
-                                  await deleteDoc(doc(db, 'works', workId, 'bills', bill.id!));
+                                if (confirmDeleteBillId !== bill.id) {
+                                  setConfirmDeleteBillId(bill.id!);
+                                  setTimeout(() => setConfirmDeleteBillId(null), 3000);
+                                  return;
                                 }
+                                await deleteDoc(doc(db, 'works', workId, 'bills', bill.id!));
+                                setConfirmDeleteBillId(null);
                               }}
-                              className="text-red-400 hover:text-red-600"
+                              className={cn(
+                                "transition-all",
+                                confirmDeleteBillId === bill.id ? "text-red-600 font-bold text-xs uppercase" : "text-red-400 hover:text-red-600"
+                              )}
+                              title={confirmDeleteBillId === bill.id ? "Click again to confirm" : "Delete bill"}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {confirmDeleteBillId === bill.id ? "Confirm" : <Trash2 className="w-4 h-4" />}
                             </button>
                           </div>
                         </td>
@@ -456,13 +507,22 @@ export function WorkDetails({ workId, userRole, onBack, onEdit }: WorkDetailsPro
                       <div className="absolute top-3 right-3">
                         <button 
                           onClick={async () => {
-                            if(confirm('Delete this photo?')) {
-                              await deleteDoc(doc(db, 'works', workId, 'photos', photo.id!));
+                            if (confirmDeletePhotoId !== photo.id) {
+                              setConfirmDeletePhotoId(photo.id!);
+                              setTimeout(() => setConfirmDeletePhotoId(null), 3000);
+                              return;
                             }
+                            await deleteDoc(doc(db, 'works', workId, 'photos', photo.id!));
+                            setConfirmDeletePhotoId(null);
                           }}
-                          className="w-8 h-8 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                          className={cn(
+                            "w-8 h-8 backdrop-blur-md text-white rounded-full flex items-center justify-center transition-all",
+                            confirmDeletePhotoId === photo.id 
+                              ? "bg-red-600 w-auto px-3 text-[10px] font-bold uppercase tracking-wider" 
+                              : "bg-black/50 opacity-0 group-hover:opacity-100 hover:bg-red-500"
+                          )}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {confirmDeletePhotoId === photo.id ? "Confirm" : <Trash2 className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>

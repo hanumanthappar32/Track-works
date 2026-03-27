@@ -58,6 +58,12 @@ service cloud.firestore {
     //   - code: string (required)
     //   - name: string (required)
     //
+    // Collection: districts
+    // Document ID: districtId
+    // Fields:
+    //   - name: string (required)
+    //   - thaluks: list (required)
+    //
     // ===============================================================
 
     // ===============================================================
@@ -73,9 +79,11 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          request.auth.token.email == "hanumanthappar32@gmail.com" ||
-          request.auth.token.email == "ramesh.h.ipad@gmail.com");
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          (request.auth.token.email == "hanumanthappar32@gmail.com" && request.auth.token.email_verified == true) ||
+          (request.auth.token.email == "ramesh.h.ipad@gmail.com" && request.auth.token.email_verified == true)
+        );
     }
 
     function hasRequiredFields(fields) {
@@ -107,7 +115,7 @@ service cloud.firestore {
     }
 
     function isValidWork(data, isCreate) {
-      let allowedFields = ['id', 'name', 'financialYear', 'classification', 'estimateYear', 'estimateStatus', 'estimatedCost', 'sanctionRefNo', 'sanctionDate', 'headOfAccount', 'agencyName', 'agreementNo', 'agreementDate', 'physicalProgress', 'progressRemarks', 'status', 'createdBy', 'createdAt', 'updatedAt'];
+      let allowedFields = ['id', 'name', 'financialYear', 'classification', 'estimateYear', 'estimateStatus', 'estimatedCost', 'sanctionRefNo', 'sanctionDate', 'headOfAccount', 'agencyName', 'agreementNo', 'agreementDate', 'physicalProgress', 'progressRemarks', 'status', 'district', 'thaluk', 'createdBy', 'createdAt', 'updatedAt'];
       let requiredFields = ['name', 'financialYear', 'classification', 'estimateStatus', 'status', 'createdBy', 'createdAt'];
       
       return (isCreate ? hasRequiredFields(requiredFields) : true) &&
@@ -117,6 +125,8 @@ service cloud.firestore {
              data.classification in ['Fresh', 'Spillover'] &&
              data.estimateStatus in ['Submitted', 'Sanctioned'] &&
              (!('status' in data) || data.status in ['Completed', 'To be started', 'In progress']) &&
+             (!('district' in data) || data.district == null || (data.district is string && data.district.size() < 200)) &&
+             (!('thaluk' in data) || data.thaluk == null || (data.thaluk is string && data.thaluk.size() < 200)) &&
              (!('createdBy' in data) || data.createdBy == request.auth.uid || isAdmin()) &&
              (!('createdAt' in data) || data.createdAt is string) &&
              (!('updatedAt' in data) || data.updatedAt == null || data.updatedAt is string) &&
@@ -162,30 +172,41 @@ service cloud.firestore {
     }
 
     match /works/{workId} {
-      allow read: if isAuthenticated() && (!('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid || isAdmin());
+      allow read: if isAuthenticated() && (isAdmin() || !('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid);
       allow create: if isAuthenticated() && isValidWork(request.resource.data, true);
       allow update: if isAuthenticated() && isValidWork(request.resource.data, false) &&
                       (isAdmin() || (resource.data.createdBy == request.auth.uid && request.resource.data.createdBy == resource.data.createdBy));
-      allow delete: if isAuthenticated() && (!('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (isAdmin() || !('createdBy' in resource.data) || resource.data.createdBy == request.auth.uid);
 
       match /bills/{billId} {
-        allow read: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow create: if isAuthenticated() && isValidBill(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow update: if isAuthenticated() && isValidBill(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow delete: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow read: if isAuthenticated() && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow create: if isAuthenticated() && isValidBill(request.resource.data) && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow update: if isAuthenticated() && isValidBill(request.resource.data) && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow delete: if isAuthenticated() && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
       }
 
       match /photos/{photoId} {
-        allow read: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow create: if isAuthenticated() && isValidPhoto(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow update: if isAuthenticated() && isValidPhoto(request.resource.data) && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
-        allow delete: if isAuthenticated() && (!('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid || isAdmin());
+        allow read: if isAuthenticated() && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow create: if isAuthenticated() && isValidPhoto(request.resource.data) && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow update: if isAuthenticated() && isValidPhoto(request.resource.data) && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
+        allow delete: if isAuthenticated() && (isAdmin() || !('createdBy' in get(/databases/$(database)/documents/works/$(workId)).data) || get(/databases/$(database)/documents/works/$(workId)).data.createdBy == request.auth.uid);
       }
     }
 
     match /headsOfAccount/{hoaId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+
+    match /districts/{districtId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && hasRequiredFields(['name', 'thaluks']) && 
+                      request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+                      request.resource.data.thaluks is list;
+      allow update: if isAdmin() && 
+                      (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() > 0)) &&
+                      (!('thaluks' in request.resource.data) || request.resource.data.thaluks is list);
+      allow delete: if isAdmin();
     }
 
     match /{path=**} {

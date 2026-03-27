@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, orderBy, onSnapshot, where, getDoc, doc } from 'firebase/firestore';
-import { Work } from '../types';
-import { BarChart3, PieChart, TrendingUp, CheckCircle2, Clock, PlayCircle, FileText, Download, X, ArrowRight, HardHat, Calendar } from 'lucide-react';
+import { Work, District } from '../types';
+import { BarChart3, PieChart, TrendingUp, CheckCircle2, Clock, PlayCircle, FileText, Download, X, ArrowRight, HardHat, Calendar, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ReportsProps {
@@ -12,10 +12,13 @@ interface ReportsProps {
 
 export function Reports({ userId, onSelectWork }: ReportsProps) {
   const [works, setWorks] = useState<Work[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [drillDown, setDrillDown] = useState<{ title: string, works: Work[] } | null>(null);
   const [filterHeadOfAccount, setFilterHeadOfAccount] = useState('All');
+  const [filterDistrict, setFilterDistrict] = useState('All');
+  const [filterThaluk, setFilterThaluk] = useState('All');
 
   useEffect(() => {
     if (!userId) return;
@@ -28,18 +31,18 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
         const finalIsAdmin = adminStatus || isHardcodedAdmin;
         setIsAdmin(finalIsAdmin);
 
-        let q;
-        if (finalIsAdmin) {
-          q = query(collection(db, 'works'), orderBy('createdAt', 'desc'));
-        } else {
-          q = query(
-            collection(db, 'works'),
-            where('createdBy', '==', userId),
-            orderBy('createdAt', 'desc')
-          );
-        }
+        // We always filter by createdBy for data isolation
+        const q = query(
+          collection(db, 'works'),
+          where('createdBy', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribeDistricts = onSnapshot(query(collection(db, 'districts'), orderBy('name', 'asc')), (snapshot) => {
+          setDistricts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as District)));
+        });
+
+        const unsubscribeWorks = onSnapshot(q, (snapshot) => {
           const worksData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work));
           setWorks(worksData);
           setLoading(false);
@@ -47,7 +50,10 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
           handleFirestoreError(err, OperationType.LIST, 'works');
         });
 
-        return unsubscribe;
+        return () => {
+          unsubscribeDistricts();
+          unsubscribeWorks();
+        };
       } catch (err) {
         console.error("Error fetching data for reports:", err);
         setLoading(false);
@@ -62,7 +68,9 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
 
   const filteredWorks = works.filter(w => {
     const matchesHeadOfAccount = filterHeadOfAccount === 'All' || w.headOfAccount === filterHeadOfAccount;
-    return matchesHeadOfAccount;
+    const matchesDistrict = filterDistrict === 'All' || w.district === filterDistrict;
+    const matchesThaluk = filterThaluk === 'All' || w.thaluk === filterThaluk;
+    return matchesHeadOfAccount && matchesDistrict && matchesThaluk;
   });
 
   const headsOfAccount = ['All', ...Array.from(new Set(works.map(w => w.headOfAccount).filter(Boolean) as string[]))].sort();
@@ -142,22 +150,62 @@ export function Reports({ userId, onSelectWork }: ReportsProps) {
         </button>
       </header>
 
-      {/* Filter */}
-      <div className="bg-white p-4 rounded-3xl shadow-sm border border-stone-200 flex items-center gap-4">
-        <div className="flex items-center gap-2 text-stone-500">
-          <FileText className="w-5 h-5" />
-          <span className="text-sm font-medium">Filter by Head of Account:</span>
+      {/* Filters */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-stone-200 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-bold text-stone-400 tracking-widest flex items-center gap-2">
+            <FileText className="w-3 h-3" />
+            Head of Account
+          </label>
+          <select
+            className="w-full px-4 py-2 bg-stone-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer text-sm"
+            value={filterHeadOfAccount}
+            onChange={(e) => setFilterHeadOfAccount(e.target.value)}
+          >
+            <option value="All">All Heads of Account</option>
+            {headsOfAccount.filter(h => h !== 'All').map(h => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
         </div>
-        <select
-          className="px-6 py-2 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer text-sm"
-          value={filterHeadOfAccount}
-          onChange={(e) => setFilterHeadOfAccount(e.target.value)}
-        >
-          <option value="All">All Heads of Account</option>
-          {headsOfAccount.filter(h => h !== 'All').map(h => (
-            <option key={h} value={h}>{h}</option>
-          ))}
-        </select>
+
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-bold text-stone-400 tracking-widest flex items-center gap-2">
+            <MapPin className="w-3 h-3" />
+            District
+          </label>
+          <select
+            className="w-full px-4 py-2 bg-stone-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer text-sm"
+            value={filterDistrict}
+            onChange={(e) => {
+              setFilterDistrict(e.target.value);
+              setFilterThaluk('All');
+            }}
+          >
+            <option value="All">All Districts</option>
+            {districts.map(d => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase font-bold text-stone-400 tracking-widest flex items-center gap-2">
+            <MapPin className="w-3 h-3" />
+            Thaluk
+          </label>
+          <select
+            className="w-full px-4 py-2 bg-stone-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer text-sm disabled:opacity-50"
+            value={filterThaluk}
+            disabled={filterDistrict === 'All'}
+            onChange={(e) => setFilterThaluk(e.target.value)}
+          >
+            <option value="All">All Thaluks</option>
+            {filterDistrict !== 'All' && districts.find(d => d.name === filterDistrict)?.thaluks.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Overall Summary */}

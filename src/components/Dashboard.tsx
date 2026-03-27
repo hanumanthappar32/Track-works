@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, orderBy, onSnapshot, where, getDoc, doc } from 'firebase/firestore';
-import { Work } from '../types';
-import { Search, Filter, Plus, Calendar, ArrowRight, HardHat, CheckCircle2, Clock } from 'lucide-react';
+import { Work, District } from '../types';
+import { Search, Filter, Plus, Calendar, ArrowRight, HardHat, CheckCircle2, Clock, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { format } from 'date-fns';
 
@@ -14,6 +14,7 @@ interface DashboardProps {
 
 export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
   const [works, setWorks] = useState<Work[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,6 +22,8 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
   const [filterClassification, setFilterClassification] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterHeadOfAccount, setFilterHeadOfAccount] = useState('All');
+  const [filterDistrict, setFilterDistrict] = useState('All');
+  const [filterThaluk, setFilterThaluk] = useState('All');
 
   useEffect(() => {
     if (!userId) return;
@@ -39,18 +42,18 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
         const finalIsAdmin = adminStatus || isHardcodedAdmin;
         setIsAdmin(finalIsAdmin);
         
-        let q;
-        if (finalIsAdmin) {
-          q = query(collection(db, 'works'), orderBy('createdAt', 'desc'));
-        } else {
-          q = query(
-            collection(db, 'works'), 
-            where('createdBy', '==', userId),
-            orderBy('createdAt', 'desc')
-          );
-        }
+        // We always filter by createdBy for data isolation, even though everyone is an admin
+        const q = query(
+          collection(db, 'works'), 
+          where('createdBy', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribeDistricts = onSnapshot(query(collection(db, 'districts'), orderBy('name', 'asc')), (snapshot) => {
+          setDistricts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as District)));
+        });
+
+        const unsubscribeWorks = onSnapshot(q, (snapshot) => {
           const worksData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work));
           setWorks(worksData);
           setLoading(false);
@@ -58,7 +61,10 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
           handleFirestoreError(err, OperationType.LIST, 'works');
         });
 
-        return unsubscribe;
+        return () => {
+          unsubscribeDistricts();
+          unsubscribeWorks();
+        };
       } catch (err) {
         console.error("Error checking admin status:", err);
         // Fallback to personal works
@@ -67,10 +73,17 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
           where('createdBy', '==', userId),
           orderBy('createdAt', 'desc')
         );
-        return onSnapshot(q, (snapshot) => {
+        const unsubscribeWorks = onSnapshot(q, (snapshot) => {
           setWorks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Work)));
           setLoading(false);
         });
+        const unsubscribeDistricts = onSnapshot(query(collection(db, 'districts'), orderBy('name', 'asc')), (snapshot) => {
+          setDistricts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as District)));
+        });
+        return () => {
+          unsubscribeWorks();
+          unsubscribeDistricts();
+        };
       }
     };
 
@@ -88,7 +101,9 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
     const matchesClassification = filterClassification === 'All' || work.classification === filterClassification;
     const matchesStatus = filterStatus === 'All' || work.status === filterStatus;
     const matchesHeadOfAccount = filterHeadOfAccount === 'All' || work.headOfAccount === filterHeadOfAccount;
-    return matchesSearch && matchesFY && matchesClassification && matchesStatus && matchesHeadOfAccount;
+    const matchesDistrict = filterDistrict === 'All' || work.district === filterDistrict;
+    const matchesThaluk = filterThaluk === 'All' || work.thaluk === filterThaluk;
+    return matchesSearch && matchesFY && matchesClassification && matchesStatus && matchesHeadOfAccount && matchesDistrict && matchesThaluk;
   });
 
   const financialYears = ['All', ...Array.from(new Set(works.map(w => w.financialYear)))].sort().reverse();
@@ -163,7 +178,7 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="All">All Status</option>
-            <option value="Not started">Not started</option>
+            <option value="To be started">To be started</option>
             <option value="In progress">In progress</option>
             <option value="Completed">Completed</option>
           </select>
@@ -175,6 +190,30 @@ export function Dashboard({ userId, onSelectWork, onAddWork }: DashboardProps) {
             <option value="All">All Heads of Account</option>
             {headsOfAccount.filter(h => h !== 'All').map(h => (
               <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
+          <select
+            className="px-6 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer"
+            value={filterDistrict}
+            onChange={(e) => {
+              setFilterDistrict(e.target.value);
+              setFilterThaluk('All');
+            }}
+          >
+            <option value="All">All Districts</option>
+            {districts.map(d => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+          <select
+            className="px-6 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer disabled:opacity-50"
+            value={filterThaluk}
+            disabled={filterDistrict === 'All'}
+            onChange={(e) => setFilterThaluk(e.target.value)}
+          >
+            <option value="All">All Thaluks</option>
+            {filterDistrict !== 'All' && districts.find(d => d.name === filterDistrict)?.thaluks.map(t => (
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </div>

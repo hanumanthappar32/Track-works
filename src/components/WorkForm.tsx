@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Work } from '../types';
-import { ArrowLeft, Save, Loader2, Info, Building2, FileText, Calendar, DollarSign, CheckCircle2, Clock } from 'lucide-react';
+import { Work, District } from '../types';
+import { ArrowLeft, Save, Loader2, Info, Building2, FileText, Calendar, DollarSign, CheckCircle2, Clock, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { HeadOfAccountSelector } from './HeadOfAccountSelector';
 
@@ -16,7 +16,8 @@ interface WorkFormProps {
 
 export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: WorkFormProps) {
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(!!workId);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [formData, setFormData] = useState<Partial<Work>>({
     name: '',
     financialYear: `${new Date().getFullYear()}-${(new Date().getFullYear() + 1).toString().slice(-2)}`,
@@ -25,12 +26,22 @@ export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: Work
     status: 'To be started',
     physicalProgress: 0,
     progressRemarks: '',
+    district: '',
+    thaluk: '',
   });
 
   useEffect(() => {
-    if (workId) {
-      const fetchWork = async () => {
-        try {
+    const fetchData = async () => {
+      try {
+        // Fetch Districts
+        const { getDocs, query, orderBy } = await import('firebase/firestore');
+        const districtsQuery = query(collection(db, 'districts'), orderBy('name', 'asc'));
+        const districtsSnapshot = await getDocs(districtsQuery);
+        const districtsList = districtsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as District));
+        setDistricts(districtsList);
+
+        // Fetch Work if editing
+        if (workId) {
           const workDoc = await getDoc(doc(db, 'works', workId));
           if (workDoc.exists()) {
             const data = workDoc.data() as Work;
@@ -39,14 +50,15 @@ export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: Work
               status: data.status || 'To be started'
             });
           }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, `works/${workId}`);
-        } finally {
-          setInitialLoading(false);
         }
-      };
-      fetchWork();
-    }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        if (workId) handleFirestoreError(err, OperationType.GET, `works/${workId}`);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    fetchData();
   }, [workId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,6 +89,16 @@ export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: Work
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    if (name === 'district') {
+      setFormData(prev => ({
+        ...prev,
+        district: value,
+        thaluk: '' // Reset thaluk when district changes
+      }));
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: (type === 'number' || type === 'range') ? (value === '' ? undefined : parseFloat(value)) : value
@@ -171,6 +193,50 @@ export function WorkForm({ userId, userRole, workId, onCancel, onSuccess }: Work
                   <option value="Completed">Completed</option>
                 </select>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Location Details */}
+        <section className="bg-white rounded-3xl p-8 border border-stone-200 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-stone-100 rounded-lg flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-stone-500" />
+            </div>
+            <h3 className="text-lg font-medium text-stone-900">Location Details</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-stone-400 uppercase tracking-wider">District</label>
+              <select
+                name="district"
+                required
+                className="w-full px-4 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
+                value={formData.district || ''}
+                onChange={handleChange}
+              >
+                <option value="">Select District</option>
+                {districts.map(d => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-stone-400 uppercase tracking-wider">Thaluk</label>
+              <select
+                name="thaluk"
+                required
+                disabled={!formData.district}
+                className="w-full px-4 py-3 bg-stone-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer disabled:opacity-50"
+                value={formData.thaluk || ''}
+                onChange={handleChange}
+              >
+                <option value="">Select Thaluk</option>
+                {formData.district && districts.find(d => d.name === formData.district)?.thaluks.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
             </div>
           </div>
         </section>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { LayoutDashboard, PlusCircle, BarChart3, LogOut, User as UserIcon, HardHat, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BarChart3, LogOut, User as UserIcon, HardHat, Menu, X, MapPin } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -12,14 +12,14 @@ interface LayoutProps {
   children: React.ReactNode;
   userProfile: UserProfile | null;
   onLogout: () => void;
-  onNavigate: (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports') => void;
+  onNavigate: (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports' | 'districts') => void;
   currentView: string;
 }
 
 export function Layout({ children, userProfile, onLogout, onNavigate, currentView }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleNavigate = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports') => {
+  const handleNavigate = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports' | 'districts') => {
     onNavigate(view);
     setIsMobileMenuOpen(false);
   };
@@ -102,6 +102,21 @@ export function Layout({ children, userProfile, onLogout, onNavigate, currentVie
             <BarChart3 className="w-5 h-5" />
             Reports
           </button>
+
+          {userProfile?.role === 'admin' && (
+            <button
+              onClick={() => handleNavigate('districts')}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+                currentView === 'districts'
+                  ? "bg-emerald-600/10 text-emerald-500 font-medium"
+                  : "hover:bg-stone-800 hover:text-white"
+              )}
+            >
+              <MapPin className="w-5 h-5" />
+              Districts
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-stone-800">

@@ -4,6 +4,12 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, order
 import { HeadOfAccount } from '../types';
 import { Plus, Edit2, Trash2, Check, X, Search, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface HeadOfAccountSelectorProps {
   value: string;
@@ -20,6 +26,7 @@ export function HeadOfAccountSelector({ value, onChange, isAdmin = false }: Head
   const [editHoa, setEditHoa] = useState({ code: '', name: '' });
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'headsOfAccount'), orderBy('code', 'asc'));
@@ -54,12 +61,17 @@ export function HeadOfAccountSelector({ value, onChange, isAdmin = false }: Head
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this Head of Account?')) return;
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'headsOfAccount', id));
       if (value === hoas.find(h => h.id === id)?.code + ' - ' + hoas.find(h => h.id === id)?.name) {
         onChange('');
       }
+      setConfirmDeleteId(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'headsOfAccount');
     }
@@ -170,9 +182,14 @@ export function HeadOfAccountSelector({ value, onChange, isAdmin = false }: Head
                             </button>
                             <button 
                               onClick={(e) => handleDelete(e, hoa.id!)}
-                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              className={cn(
+                                "p-1.5 rounded-lg transition-all",
+                                confirmDeleteId === hoa.id 
+                                  ? "text-red-600 bg-red-50 font-bold text-[10px] uppercase px-2" 
+                                  : "text-stone-400 hover:text-red-600 hover:bg-red-50"
+                              )}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {confirmDeleteId === hoa.id ? "Confirm" : <Trash2 className="w-3.5 h-3.5" />}
                             </button>
                           </div>
                         )}

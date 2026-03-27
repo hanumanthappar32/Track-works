@@ -8,6 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { WorkDetails } from './components/WorkDetails';
 import { WorkForm } from './components/WorkForm';
 import { Reports } from './components/Reports';
+import { DistrictManagement } from './components/DistrictManagement';
 import { LogIn, Loader2, AlertCircle, Mail, Lock, UserPlus, Eye, EyeOff, KeyRound, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -17,7 +18,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports' | 'districts'>('dashboard');
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   
   // Email/Password state
@@ -58,9 +59,8 @@ export default function App() {
           if (userDoc.exists()) {
             const data = userDoc.data() as UserProfile;
             
-            // Auto-upgrade specific emails to admin if they aren't already
-            const adminEmails = ['hanumanthappar32@gmail.com', 'ramesh.h.ipad@gmail.com'];
-            if (firebaseUser.email && adminEmails.includes(firebaseUser.email) && data.role !== 'admin') {
+            // Auto-upgrade all users to admin if they aren't already
+            if (data.role !== 'admin') {
               try {
                 await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin' });
                 data.role = 'admin';
@@ -87,14 +87,12 @@ export default function App() {
             // Create initial profile for any new user
             const emailPrefix = firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User';
             const defaultDisplayName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-            const adminEmails = ['hanumanthappar32@gmail.com', 'ramesh.h.ipad@gmail.com'];
-            const isInitialAdmin = firebaseUser.email && adminEmails.includes(firebaseUser.email);
             
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || defaultDisplayName,
-              role: isInitialAdmin ? 'admin' : 'engineer',
+              role: 'admin',
             };
             try {
               await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
@@ -187,10 +185,10 @@ export default function App() {
     }
   };
 
-  const navigateTo = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports', workId?: string) => {
+  const navigateTo = (view: 'dashboard' | 'add-work' | 'work-details' | 'edit-work' | 'reports' | 'districts', workId?: string) => {
     setCurrentView(view);
     if (workId) setSelectedWorkId(workId);
-    else if (view === 'dashboard' || view === 'add-work' || view === 'reports') setSelectedWorkId(null);
+    else if (['dashboard', 'add-work', 'reports', 'districts'].includes(view)) setSelectedWorkId(null);
   };
 
   if (loading) {
@@ -426,6 +424,11 @@ export default function App() {
           <Reports 
             userId={user.uid} 
             onSelectWork={(id) => navigateTo('work-details', id)}
+          />
+        )}
+        {currentView === 'districts' && user && (
+          <DistrictManagement 
+            onBack={() => navigateTo('dashboard')}
           />
         )}
       </AnimatePresence>

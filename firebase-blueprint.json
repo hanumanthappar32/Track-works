@@ -8,7 +8,7 @@
         "uid": { "type": "string", "description": "Unique user ID" },
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "User display name" },
-        "role": { "type": "string", "enum": ["admin", "engineer"], "description": "User role" }
+        "role": { "type": "string", "enum": ["admin", "engineer"], "description": "User role (admin or engineer)" }
       },
       "required": ["uid", "email"]
     },
@@ -32,6 +32,8 @@
         "physicalProgress": { "type": "number", "description": "Percentage of physical progress (0-100)" },
         "progressRemarks": { "type": "string", "description": "Remarks on physical progress" },
         "status": { "type": "string", "enum": ["Completed", "To be started", "In progress"], "description": "Current status of the work" },
+        "district": { "type": "string", "description": "District name" },
+        "thaluk": { "type": "string", "description": "Thaluk name" },
         "createdBy": { "type": "string", "description": "UID of the user who created this work" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
@@ -72,6 +74,20 @@
         "name": { "type": "string", "description": "HOA name" }
       },
       "required": ["code", "name"]
+    },
+    "District": {
+      "title": "District",
+      "description": "District and its associated thaluks",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the district" },
+        "thaluks": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "List of thaluks in this district" 
+        }
+      },
+      "required": ["name", "thaluks"]
     }
   },
   "firestore": {
@@ -94,6 +110,10 @@
     "/headsOfAccount/{hoaId}": {
       "schema": "HeadOfAccount",
       "description": "List of available Heads of Account"
+    },
+    "/districts/{districtId}": {
+      "schema": "District",
+      "description": "List of districts and their thaluks"
     }
   }
 }

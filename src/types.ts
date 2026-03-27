@@ -22,6 +22,8 @@ export interface Work {
   physicalProgress?: number;
   progressRemarks?: string;
   status: 'Completed' | 'To be started' | 'In progress';
+  district?: string;
+  thaluk?: string;
   createdBy: string;
   createdAt: string;
 }
@@ -48,4 +50,10 @@ export interface HeadOfAccount {
   id?: string;
   code: string;
   name: string;
+}
+
+export interface District {
+  id?: string;
+  name: string;
+  thaluks: string[];
 }
